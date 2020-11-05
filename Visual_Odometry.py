@@ -31,15 +31,9 @@ k = np.array([[554.254691191187, 0.0, 320.5],
 
 def extract_features(img):
     
-    #Using Clahe for better contrast, thus increasing the number of features detected
-    lab = cv2.cvtColor(img, cv2.COLOR_BGR2LAB)
-    lab_planes = cv2.split(lab)
-    clahe = cv2.createCLAHE(clipLimit=2.0,tileGridSize=(15,15))
-    lab_planes[0] = clahe.apply(lab_planes[0])
-    lab = cv2.merge(lab_planes)
-    img = cv2.cvtColor(lab, cv2.COLOR_LAB2BGR)
-    
-    #Using FAST
+    clahe = cv2.createCLAHE(clipLimit=20.0)
+    img=cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    img=clahe.apply(img)
     fast= cv2.FastFeatureDetector_create(threshold = 25, nonmaxSuppression = True)
     kp = fast.detect(img)
     kp = np.array([kp[idx].pt for idx in range(len(kp))], dtype = np.float32)
@@ -49,13 +43,21 @@ def extract_features(img):
 
 def track_features(image_ref, image_cur,ref):
     #Initializing LK parameters
-    lk_params = dict(winSize=(21, 21), criteria=(cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 30, 0.01))
+    image_ref=cv2.cvtColor(image_ref,cv2.COLOR_BGR2GRAY)
+    image_cur=cv2.cvtColor(image_cur,cv2.COLOR_BGR2GRAY)
+    
+    #Initializing LK parameters
+    lk_params = dict(winSize=(15, 15), criteria=(cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 30, 0.01))
 
     kp2, st, err = cv2.calcOpticalFlowPyrLK(image_ref, image_cur, ref, None, **lk_params)
-    st=st.reshape(st.shape[0])
+    kp1, st, err = cv2.calcOpticalFlowPyrLK(image_cur, image_ref, kp2, None, **lk_params)
+    distance=abs(ref-kp1).max(-1)
+    kp2=kp2[distance<30]
+    kp1=kp1[distance<30]
+    diff=abs(kp1-kp2).max(-1)
     
-    kp1=ref[st==1]
-    kp2=kp2[st==1]
+    return kp1,kp2,np.mean(diff)
+
     
     return kp1, kp2
 
@@ -75,20 +77,23 @@ def RelativeScale(last_cloud,new_cloud):
 
 #Estimate current cloud
 def triangulate_points(rot,trans,kp1,kp2,k):
-    t0=np.array([[1,0,0,0], 
-                 [0,1,0,0], 
-                 [0,0,1,0]])
-    t0=k.dot(t0)
-    t1=k.dot(np.hstack((rot,trans)))
-    cloud=cv2.triangulatePoints(t0,t1,kp1.reshape(2,-1),kp2.reshape(2,-1))
-    cloud=cloud.reshape(-1,4)
+    P0 = np.array([[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0]])
+    P0 = K.dot(P0)
+    P1 = np.hstack((R, t))
+    P1 = K.dot(P1)
+    kp0_3d=np.ones((3,kp0.shape[0]))
+    kp1_3d=np.ones((3,kp1.shape[0]))
+    kp0_3d[0], kp0_3d[1] = kp0[:, 0].copy(), kp0[:, 1].copy()
+    kp1_3d[0], kp1_3d[1] = kp1[:, 0].copy(), kp1[:, 1].copy()
+    cloud = cv2.triangulatePoints(P0, P1, kp0_3d[:2],kp1_3d[:2])
+    cloud=cloud.T
     return cloud[:,:3]
 
 
 
 
 trajectory=[]
-threshold=20
+threshold=1500s
 
 #Compute the keypoints for the first set
 image_gray_1=cv2.cvtColor(images[0],cv2.COLOR_BGR2GRAY)
