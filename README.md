@@ -22,4 +22,6 @@ This project was aimed at understanding the front end method of estimating the m
 Calculation of absolute scale was avoided as ground truth will not available all the time. The result below is obtained on the basis of relative scale. 
 
 
-![Result](https://github.com/Kush0301/Visual-Odometry/blob/master/visual_result.png?raw=true)
+<p align="center">
+<img width="460" height="300" src="https://github.com/Kush0301/Visual-Odometry/blob/master/visual_result.png?raw=true">
+</p>
